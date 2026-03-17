@@ -1,0 +1,152 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum TransactionType {
+  EXPENSE
+  INCOME
+}
+
+enum ExpenseCategoryType {
+  ESSENTIAL
+  NON_ESSENTIAL
+  SUBSCRIPTION
+  INVESTMENT
+  DEBT
+  OTHER
+}
+
+model Category {
+  id          String               @id @default(cuid())
+  name        String
+  type        ExpenseCategoryType  @default(OTHER)
+  color       String?
+  description String?
+
+  transactions Transaction[]
+  goals        SpendingGoal[]
+
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+}
+
+model Account {
+  id          String          @id @default(cuid())
+  name        String
+  type        String
+  institution String?
+  currency    String          @default("BRL")
+
+  transactions Transaction[]
+
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model CreditCard {
+  id           String              @id @default(cuid())
+  name         String
+  last4        String?
+  closingDay   Int
+  dueDay       Int
+  limit        Decimal?            @db.Decimal(18, 2)
+
+  invoices     CreditCardInvoice[]
+  transactions Transaction[]
+
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+}
+
+model CreditCardInvoice {
+  id          String        @id @default(cuid())
+  month       Int
+  year        Int
+  closingDate DateTime
+  dueDate     DateTime
+
+  cardId      String
+  card        CreditCard    @relation(fields: [cardId], references: [id])
+
+  transactions Transaction[]
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([cardId, month, year])
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  whatsapp  String?
+  image    String?
+
+  transactions Transaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Transaction {
+  id            String             @id @default(cuid())
+  type          TransactionType
+  description   String
+  amount        Decimal            @db.Decimal(18, 2)
+  date          DateTime
+  dueDate       DateTime?
+  paidAt        DateTime?
+  isPaid        Boolean            @default(false)
+
+  userId        String?
+  user          User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  categoryId    String?
+  category      Category?          @relation(fields: [categoryId], references: [id])
+
+  accountId     String?
+  account       Account?           @relation(fields: [accountId], references: [id])
+
+  creditCardId  String?
+  creditCard    CreditCard?        @relation(fields: [creditCardId], references: [id])
+
+  invoiceId     String?
+  invoice       CreditCardInvoice? @relation(fields: [invoiceId], references: [id])
+
+  notes         String?
+
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@index([date])
+  @@index([categoryId])
+  @@index([userId])
+}
+
+model SpendingGoal {
+  id          String    @id @default(cuid())
+  name        String
+  month       Int
+  year        Int
+  maxAmount   Decimal   @db.Decimal(18, 2)
+
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id])
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([month, year])
+}
