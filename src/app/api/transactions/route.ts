@@ -7,24 +7,30 @@ const transactionSchema = z.object({
   type: z.enum(["EXPENSE", "INCOME"]),
   description: z.string().min(1),
   amount: z.number().positive(),
-  date: z.string().datetime(),
+  date: z.string(),
   categoryId: z.string().cuid().optional(),
   accountId: z.string().cuid().optional(),
   creditCardId: z.string().cuid().optional(),
-  dueDate: z.string().datetime().optional(),
+  dueDate: z.string().optional(),
   notes: z.string().optional(),
+  isRecurring: z.boolean().optional(),
+  expenseType: z.enum(["FIXED", "VARIABLE"]).optional(),
+  isPaid: z.boolean().optional(),
 });
 
-export async function GET() {
+export async function GET(request: Request) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
+  const { searchParams } = new URL(request.url);
+  const take = searchParams.get("take") ? parseInt(searchParams.get("take")!, 10) : 50;
+
   const transactions = await prisma.transaction.findMany({
     where: { userId: session.user.id },
     orderBy: { date: "desc" },
-    take: 20,
+    take: Math.min(take, 200),
     include: {
       category: true,
     },
@@ -55,6 +61,10 @@ export async function POST(request: Request) {
         accountId: data.accountId,
         creditCardId: data.creditCardId,
         notes: data.notes,
+        isRecurring: data.isRecurring ?? false,
+        expenseType: data.expenseType ?? null,
+        isPaid: data.isPaid ?? (data.type === "INCOME"),
+        paidAt: data.isPaid === true ? new Date() : null,
       },
     });
 

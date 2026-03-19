@@ -4,7 +4,6 @@ import bcrypt from "bcryptjs";
 import type { AuthOptions } from "next-auth";
 
 export const authOptions: AuthOptions = {
-  trustHost: true,
   secret: process.env.AUTH_SECRET,
   providers: [
     Credentials({

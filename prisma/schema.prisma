@@ -26,6 +26,11 @@ enum ExpenseCategoryType {
   OTHER
 }
 
+enum ExpenseType {
+  FIXED
+  VARIABLE
+}
+
 model Category {
   id          String               @id @default(cuid())
   name        String
@@ -94,7 +99,8 @@ model User {
   whatsapp  String?
   image    String?
 
-  transactions Transaction[]
+  transactions   Transaction[]
+  financialGoals FinancialGoal[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -109,6 +115,8 @@ model Transaction {
   dueDate       DateTime?
   paidAt        DateTime?
   isPaid        Boolean            @default(false)
+  isRecurring   Boolean            @default(false)
+  expenseType   ExpenseType?       // FIXED or VARIABLE (for expenses only)
 
   userId        String?
   user          User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -149,4 +157,19 @@ model SpendingGoal {
   updatedAt   DateTime  @updatedAt
 
   @@index([month, year])
+}
+
+model FinancialGoal {
+  id            String   @id @default(cuid())
+  name          String
+  targetAmount  Decimal  @db.Decimal(18, 2)
+  currentAmount Decimal  @db.Decimal(18, 2) @default(0)
+
+  userId        String?
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([userId])
 }
