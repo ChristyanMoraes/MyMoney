@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   PieChart,
@@ -19,6 +20,8 @@ import {
   Legend,
 } from "recharts";
 import { AppLayout } from "@/components/AppLayout";
+import { MonthFilter } from "@/components/MonthFilter";
+import { TransactionModal } from "@/components/TransactionModal";
 
 type DashboardData = {
   summary: {
@@ -33,7 +36,7 @@ type DashboardData = {
     prevIncome: number;
     prevExpenses: number;
   };
-  categoryRanking: { name: string; total: number }[];
+  categoryRanking: { id: string; name: string; total: number }[];
   dailyData: { date: string; income: number; expense: number }[];
   transactions: Array<{
     id: string;
@@ -67,9 +70,18 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const router = useRouter();
+  const now = new Date();
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [year, setYear] = useState(now.getFullYear());
 
-  useEffect(() => {
-    fetch("/api/dashboard")
+  function goToCategory(catId: string) {
+    router.push(`/dashboard/gastos-por-categoria/${catId}?month=${month}&year=${year}`);
+  }
+
+  function loadDashboard() {
+    fetch(`/api/dashboard?month=${month}&year=${year}`)
       .then((r) => {
         if (!r.ok) throw new Error("Erro ao carregar");
         return r.json();
@@ -77,25 +89,52 @@ export default function DashboardPage() {
       .then(setData)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, []);
+  }
+
+  useEffect(() => {
+    setLoading(true);
+    loadDashboard();
+  }, [month, year]);
 
   if (!session) return null;
 
   return (
     <AppLayout user={session.user}>
       <div className="space-y-8">
-        <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
-            Dashboard Financeiro
-          </h1>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Visão geral do seu mês
-          </p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
+              Dashboard Financeiro
+            </h1>
+            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+              Visão geral do seu mês
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <MonthFilter
+              month={month}
+              year={year}
+              onChange={(m, y) => {
+                setMonth(m);
+                setYear(y);
+              }}
+            />
+            <button
+            type="button"
+            onClick={() => setModalOpen(true)}
+            className="inline-flex items-center gap-2 rounded-xl bg-[#10b77f] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#10b77f]/90"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Nova movimentação
+          </button>
+          </div>
         </div>
 
         {loading ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-            {Array.from({ length: 6 }).map((_, i) => (
+            {Array.from({ length: 5 }).map((_, i) => (
               <SkeletonCard key={i} />
             ))}
           </div>
@@ -106,15 +145,7 @@ export default function DashboardPage() {
         ) : data ? (
           <>
             {/* Bloco 1: Cards de resumo */}
-            <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-              <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-[#1d2330]">
-                <p className="text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                  Saldo atual
-                </p>
-                <p className={`mt-1 text-xl font-bold ${data.summary.balance >= 0 ? "text-[#10b77f]" : "text-rose-500"}`}>
-                  {formatCurrency(data.summary.balance)}
-                </p>
-              </div>
+            <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
               <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-[#1d2330]">
                 <p className="text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                   Receitas do mês
@@ -174,11 +205,14 @@ export default function DashboardPage() {
               </h2>
               <div className="flex flex-wrap gap-3">
                 {data.categoryRanking.length > 0 && (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900/50 dark:bg-amber-950/30">
+                  <Link
+                    href={`/dashboard/gastos-por-categoria/${data.categoryRanking[0].id}?month=${month}&year=${year}`}
+                    className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 transition hover:bg-amber-100 dark:border-amber-900/50 dark:bg-amber-950/30 dark:hover:bg-amber-950/50"
+                  >
                     <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-                      Sua maior categoria de despesa foi <strong>{data.categoryRanking[0].name}</strong>
+                      Sua maior categoria de despesa foi <strong>{data.categoryRanking[0].name}</strong> — clique para ver detalhes
                     </p>
-                  </div>
+                  </Link>
                 )}
                 {data.summary.income > 0 && data.summary.incomeCommitted > 50 && (
                   <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 dark:border-rose-900/50 dark:bg-rose-950/30">
@@ -207,9 +241,19 @@ export default function DashboardPage() {
             <div className="grid gap-8 lg:grid-cols-2">
               {/* Bloco 3: Gastos por categoria */}
               <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-[#1d2330]">
-                <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-white">
-                  Gastos por categoria
-                </h2>
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">
+                    Gastos por categoria
+                  </h2>
+                  {data.categoryRanking.length > 0 && (
+                    <Link
+                      href={`/dashboard/gastos-por-categoria/${data.categoryRanking[0].id}?month=${month}&year=${year}`}
+                      className="rounded-lg bg-[#10b77f] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#10b77f]/90"
+                    >
+                      Ver detalhes
+                    </Link>
+                  )}
+                </div>
                 {data.categoryRanking.length > 0 ? (
                   <>
                     <div className="h-64">
@@ -223,6 +267,8 @@ export default function DashboardPage() {
                             cy="50%"
                             outerRadius={80}
                             label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                            onClick={(_, index) => goToCategory(data.categoryRanking[index]?.id ?? "")}
+                            style={{ cursor: "pointer" }}
                           >
                             {data.categoryRanking.map((_, i) => (
                               <Cell key={i} fill={COLORS[i % COLORS.length]} />
@@ -234,7 +280,11 @@ export default function DashboardPage() {
                     </div>
                     <div className="mt-4 space-y-2">
                       {data.categoryRanking.slice(0, 5).map((c, i) => (
-                        <div key={c.name} className="flex items-center justify-between text-sm">
+                        <Link
+                          key={c.id}
+                          href={`/dashboard/gastos-por-categoria/${c.id}?month=${month}&year=${year}`}
+                          className="flex cursor-pointer items-center justify-between rounded-lg px-2 py-1.5 text-sm transition hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                        >
                           <span className="flex items-center gap-2">
                             <span
                               className="h-2 w-2 rounded-full"
@@ -243,7 +293,7 @@ export default function DashboardPage() {
                             {c.name}
                           </span>
                           <span className="font-medium">{formatCurrency(c.total)}</span>
-                        </div>
+                        </Link>
                       ))}
                     </div>
                   </>
@@ -414,6 +464,12 @@ export default function DashboardPage() {
           </>
         ) : null}
       </div>
+
+      <TransactionModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSuccess={loadDashboard}
+      />
     </AppLayout>
   );
 }

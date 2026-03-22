@@ -110,15 +110,17 @@ export async function GET(request: Request) {
     .filter((t) => t.type === "EXPENSE" && t.category)
     .reduce(
       (acc, t) => {
+        const id = t.category!.id;
         const name = t.category!.name;
-        acc[name] = (acc[name] || 0) + Number(t.amount);
+        if (!acc[id]) acc[id] = { name, total: 0 };
+        acc[id].total += Number(t.amount);
         return acc;
       },
-      {} as Record<string, number>
+      {} as Record<string, { name: string; total: number }>
     );
 
   const categoryRanking = Object.entries(byCategory)
-    .map(([name, total]) => ({ name, total }))
+    .map(([id, { name, total }]) => ({ id, name, total }))
     .sort((a, b) => b.total - a.total);
 
   const dailyData: Record<string, { income: number; expense: number }> = {};

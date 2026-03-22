@@ -10,12 +10,25 @@ type Category = {
   type: string;
 };
 
+export type EditTransaction = {
+  id: string;
+  type: TransactionType;
+  description: string;
+  amount: number;
+  date: string;
+  categoryId?: string | null;
+  notes?: string | null;
+  isRecurring?: boolean;
+  expenseType?: "FIXED" | "VARIABLE" | null;
+  isPaid?: boolean;
+};
+
 type TransactionModalProps = {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
   initialType?: TransactionType;
-  editTransaction?: null; // Future: pass transaction for edit
+  editTransaction?: EditTransaction | null;
 };
 
 export function TransactionModal({
@@ -23,6 +36,7 @@ export function TransactionModal({
   onClose,
   onSuccess,
   initialType = "EXPENSE",
+  editTransaction = null,
 }: TransactionModalProps) {
   const [type, setType] = useState<TransactionType>(initialType);
   const [title, setTitle] = useState("");
@@ -43,21 +57,34 @@ export function TransactionModal({
 
   useEffect(() => {
     if (isOpen) {
-      setTitle("");
-      setAmount("");
-      setDate(new Date().toISOString().slice(0, 10));
-      setCategoryId("");
-      setDescription("");
-      setIsRecurring(false);
-      setExpenseType("VARIABLE");
-      setExpenseStatus("PENDING");
+      if (editTransaction) {
+        setType(editTransaction.type);
+        setTitle(editTransaction.description);
+        setAmount(String(editTransaction.amount));
+        setDate(new Date(editTransaction.date).toISOString().slice(0, 10));
+        setCategoryId(editTransaction.categoryId || "");
+        setDescription(editTransaction.notes || "");
+        setIsRecurring(editTransaction.isRecurring ?? false);
+        setExpenseType(editTransaction.expenseType ?? "VARIABLE");
+        setExpenseStatus(editTransaction.isPaid ? "PAID" : "PENDING");
+      } else {
+        setType(initialType);
+        setTitle("");
+        setAmount("");
+        setDate(new Date().toISOString().slice(0, 10));
+        setCategoryId("");
+        setDescription("");
+        setIsRecurring(false);
+        setExpenseType("VARIABLE");
+        setExpenseStatus("PENDING");
+      }
       setErrors({});
       fetch("/api/categories")
         .then((r) => r.json())
         .then((data) => setCategories(Array.isArray(data) ? data : []))
         .catch(() => setCategories([]));
     }
-  }, [isOpen]);
+  }, [isOpen, editTransaction, initialType]);
 
   function validate(): boolean {
     const e: Record<string, string> = {};
@@ -91,8 +118,13 @@ export function TransactionModal({
         dueDate: type === "EXPENSE" ? dateObj.toISOString() : undefined,
       };
 
-      const res = await fetch("/api/transactions", {
-        method: "POST",
+      const url = editTransaction
+        ? `/api/transactions/${editTransaction.id}`
+        : "/api/transactions";
+      const method = editTransaction ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
@@ -129,7 +161,7 @@ export function TransactionModal({
       >
         <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
           <h2 id="modal-title" className="text-lg font-semibold text-zinc-900 dark:text-white">
-            Nova transação
+            {editTransaction ? "Editar transação" : "Nova transação"}
           </h2>
           <button
             type="button"
@@ -291,15 +323,19 @@ export function TransactionModal({
             />
           </div>
 
-          <label className="flex cursor-pointer items-center gap-2">
-            <input
-              type="checkbox"
-              checked={isRecurring}
-              onChange={(e) => setIsRecurring(e.target.checked)}
-              className="h-4 w-4 rounded border-zinc-300 text-[#10b77f] focus:ring-[#10b77f]"
-            />
-            <span className="text-sm text-zinc-700 dark:text-zinc-300">Transação recorrente</span>
-          </label>
+          {type === "EXPENSE" && (
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={isRecurring}
+                onChange={(e) => setIsRecurring(e.target.checked)}
+                className="h-4 w-4 rounded border-zinc-300 text-[#10b77f] focus:ring-[#10b77f]"
+              />
+              <span className="text-sm text-zinc-700 dark:text-zinc-300">
+                Transação recorrente (adiciona cópia no mês seguinte)
+              </span>
+            </label>
+          )}
 
           {errors.submit && <p className="text-sm text-rose-500">{errors.submit}</p>}
 

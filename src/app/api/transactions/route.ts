@@ -26,9 +26,25 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const take = searchParams.get("take") ? parseInt(searchParams.get("take")!, 10) : 50;
+  const month = searchParams.get("month") ? parseInt(searchParams.get("month")!, 10) : null;
+  const year = searchParams.get("year") ? parseInt(searchParams.get("year")!, 10) : null;
+  const categoryId = searchParams.get("categoryId") || null;
+
+  const where: { userId: string; type?: "EXPENSE"; date?: { gte: Date; lt: Date }; categoryId?: string } = { userId: session.user.id };
+
+  if (month != null && year != null) {
+    const startOfMonth = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
+    const startOfNextMonth = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
+    where.date = { gte: startOfMonth, lt: startOfNextMonth };
+  }
+
+  if (categoryId) {
+    where.categoryId = categoryId;
+    where.type = "EXPENSE";
+  }
 
   const transactions = await prisma.transaction.findMany({
-    where: { userId: session.user.id },
+    where,
     orderBy: { date: "desc" },
     take: Math.min(take, 200),
     include: {
@@ -49,24 +65,55 @@ export async function POST(request: Request) {
     const json = await request.json();
     const data = transactionSchema.parse(json);
 
+    const baseDate = new Date(data.date);
+    const isPaid = data.isPaid ?? (data.type === "INCOME");
+    const isRecurring = data.isRecurring ?? false;
+    const isFixed = data.expenseType === "FIXED";
+    const shouldCreateNextMonth =
+      data.type === "EXPENSE" && (isRecurring || isFixed);
+
     const created = await prisma.transaction.create({
       data: {
         type: data.type,
         description: data.description,
         amount: data.amount,
-        date: new Date(data.date),
+        date: baseDate,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
         userId: session.user.id,
         categoryId: data.categoryId,
         accountId: data.accountId,
         creditCardId: data.creditCardId,
         notes: data.notes,
-        isRecurring: data.isRecurring ?? false,
+        isRecurring,
         expenseType: data.expenseType ?? null,
-        isPaid: data.isPaid ?? (data.type === "INCOME"),
-        paidAt: data.isPaid === true ? new Date() : null,
+        isPaid,
+        paidAt: isPaid === true ? new Date() : null,
       },
     });
+
+    if (shouldCreateNextMonth) {
+      const nextMonthDate = new Date(baseDate);
+      nextMonthDate.setUTCMonth(nextMonthDate.getUTCMonth() + 1);
+
+      await prisma.transaction.create({
+        data: {
+          type: "EXPENSE",
+          description: data.description,
+          amount: data.amount,
+          date: nextMonthDate,
+          dueDate: nextMonthDate,
+          userId: session.user.id,
+          categoryId: data.categoryId,
+          accountId: data.accountId,
+          creditCardId: data.creditCardId,
+          notes: data.notes,
+          isRecurring,
+          expenseType: data.expenseType ?? null,
+          isPaid: false,
+          paidAt: null,
+        },
+      });
+    }
 
     return NextResponse.json(created, { status: 201 });
   } catch (error) {
