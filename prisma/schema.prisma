@@ -133,6 +133,10 @@ model Transaction {
   invoiceId     String?
   invoice       CreditCardInvoice? @relation(fields: [invoiceId], references: [id])
 
+  installments      Int?     // total de parcelas (ex: 12). null = à vista
+  installmentNumber Int?     // parcela atual (ex: 3 para "3ª de 12")
+  purchasedBy       String?  // quem fez a compra: "Eu", "Cônjuge", "Filho", etc.
+
   notes         String?
 
   createdAt     DateTime           @default(now())

@@ -14,10 +14,14 @@ type Transaction = {
   date: string;
   category?: { name: string } | null;
   categoryId?: string | null;
+  creditCardId?: string | null;
   notes?: string | null;
   isRecurring?: boolean;
   expenseType?: "FIXED" | "VARIABLE" | null;
   isPaid?: boolean;
+  installments?: number | null;
+  installmentNumber?: number | null;
+  purchasedBy?: string | null;
 };
 
 export default function MovimentacoesPage() {
@@ -75,10 +79,14 @@ export default function MovimentacoesPage() {
       amount: Number(t.amount),
       date: t.date,
       categoryId: t.categoryId,
+      creditCardId: t.creditCardId,
       notes: t.notes,
       isRecurring: t.isRecurring,
       expenseType: t.expenseType,
       isPaid: t.isPaid,
+      installments: t.installments,
+      installmentNumber: t.installmentNumber,
+      purchasedBy: t.purchasedBy,
     });
     setModalOpen(true);
   }

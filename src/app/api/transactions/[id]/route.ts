@@ -9,11 +9,15 @@ const transactionSchema = z.object({
   amount: z.number().positive(),
   date: z.string(),
   categoryId: z.string().cuid().optional().nullable(),
+  creditCardId: z.string().cuid().optional().nullable(),
   dueDate: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
   isRecurring: z.boolean().optional(),
   expenseType: z.enum(["FIXED", "VARIABLE"]).optional().nullable(),
   isPaid: z.boolean().optional(),
+  installments: z.number().int().min(1).max(60).optional().nullable(),
+  installmentNumber: z.number().int().min(1).optional().nullable(),
+  purchasedBy: z.string().max(100).optional().nullable(),
 });
 
 export async function PUT(
@@ -48,11 +52,15 @@ export async function PUT(
         date: new Date(data.date),
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
         categoryId: data.categoryId || null,
+        creditCardId: data.creditCardId ?? existing.creditCardId,
         notes: data.notes || null,
         isRecurring: data.isRecurring ?? existing.isRecurring,
         expenseType: data.expenseType ?? existing.expenseType,
         isPaid: data.isPaid ?? existing.isPaid,
         paidAt: data.isPaid === true ? new Date() : data.isPaid === false ? null : existing.paidAt,
+        installments: data.installments ?? existing.installments,
+        installmentNumber: data.installmentNumber ?? existing.installmentNumber,
+        purchasedBy: data.purchasedBy !== undefined ? data.purchasedBy : existing.purchasedBy,
       },
     });
 

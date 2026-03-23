@@ -16,6 +16,8 @@ const transactionSchema = z.object({
   isRecurring: z.boolean().optional(),
   expenseType: z.enum(["FIXED", "VARIABLE"]).optional(),
   isPaid: z.boolean().optional(),
+  installments: z.number().int().min(1).max(60).optional().nullable(),
+  purchasedBy: z.string().max(100).optional().nullable(),
 });
 
 export async function GET(request: Request) {
@@ -29,8 +31,9 @@ export async function GET(request: Request) {
   const month = searchParams.get("month") ? parseInt(searchParams.get("month")!, 10) : null;
   const year = searchParams.get("year") ? parseInt(searchParams.get("year")!, 10) : null;
   const categoryId = searchParams.get("categoryId") || null;
+  const creditCardId = searchParams.get("creditCardId") || null;
 
-  const where: { userId: string; type?: "EXPENSE"; date?: { gte: Date; lt: Date }; categoryId?: string } = { userId: session.user.id };
+  const where: { userId: string; type?: "EXPENSE"; date?: { gte: Date; lt: Date }; categoryId?: string; creditCardId?: string } = { userId: session.user.id };
 
   if (month != null && year != null) {
     const startOfMonth = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
@@ -40,6 +43,11 @@ export async function GET(request: Request) {
 
   if (categoryId) {
     where.categoryId = categoryId;
+    where.type = "EXPENSE";
+  }
+
+  if (creditCardId) {
+    where.creditCardId = creditCardId;
     where.type = "EXPENSE";
   }
 
@@ -69,29 +77,53 @@ export async function POST(request: Request) {
     const isPaid = data.isPaid ?? (data.type === "INCOME");
     const isRecurring = data.isRecurring ?? false;
     const isFixed = data.expenseType === "FIXED";
+    const installments = data.installments && data.installments > 1 ? data.installments : 1;
+    const isParceled = data.creditCardId && installments > 1;
+    const parcelAmount = isParceled ? Number((data.amount / installments).toFixed(2)) : data.amount;
     const shouldCreateNextMonth =
-      data.type === "EXPENSE" && (isRecurring || isFixed);
+      data.type === "EXPENSE" && (isRecurring || isFixed) && !isParceled;
+
+    const baseTxData = {
+      type: data.type,
+      description: data.description,
+      amount: isParceled ? parcelAmount : data.amount,
+      date: baseDate,
+      dueDate: data.dueDate ? new Date(data.dueDate) : null,
+      userId: session.user.id,
+      categoryId: data.categoryId,
+      accountId: data.accountId,
+      creditCardId: data.creditCardId,
+      notes: data.notes,
+      isRecurring: isParceled ? false : isRecurring,
+      expenseType: data.expenseType ?? null,
+      isPaid,
+      paidAt: isPaid === true ? new Date() : null,
+      installments: isParceled ? installments : null,
+      installmentNumber: isParceled ? 1 : null,
+      purchasedBy: data.purchasedBy || null,
+    };
 
     const created = await prisma.transaction.create({
-      data: {
-        type: data.type,
-        description: data.description,
-        amount: data.amount,
-        date: baseDate,
-        dueDate: data.dueDate ? new Date(data.dueDate) : null,
-        userId: session.user.id,
-        categoryId: data.categoryId,
-        accountId: data.accountId,
-        creditCardId: data.creditCardId,
-        notes: data.notes,
-        isRecurring,
-        expenseType: data.expenseType ?? null,
-        isPaid,
-        paidAt: isPaid === true ? new Date() : null,
-      },
+      data: { ...baseTxData },
     });
 
-    if (shouldCreateNextMonth) {
+    if (isParceled && installments > 1) {
+      for (let i = 2; i <= installments; i++) {
+        const parcelDate = new Date(baseDate);
+        parcelDate.setUTCMonth(parcelDate.getUTCMonth() + i - 1);
+        await prisma.transaction.create({
+          data: {
+            ...baseTxData,
+            amount: parcelAmount,
+            date: parcelDate,
+            dueDate: parcelDate,
+            isPaid: false,
+            paidAt: null,
+            installmentNumber: i,
+          },
+        });
+      }
+    } else if (shouldCreateNextMonth) {
       const nextMonthDate = new Date(baseDate);
       nextMonthDate.setUTCMonth(nextMonthDate.getUTCMonth() + 1);
 

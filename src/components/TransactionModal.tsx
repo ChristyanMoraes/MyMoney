@@ -10,6 +10,8 @@ type Category = {
   type: string;
 };
 
+type CreditCard = { id: string; name: string; last4?: string | null };
+
 export type EditTransaction = {
   id: string;
   type: TransactionType;
@@ -17,10 +19,14 @@ export type EditTransaction = {
   amount: number;
   date: string;
   categoryId?: string | null;
+  creditCardId?: string | null;
   notes?: string | null;
   isRecurring?: boolean;
   expenseType?: "FIXED" | "VARIABLE" | null;
   isPaid?: boolean;
+  installments?: number | null;
+  installmentNumber?: number | null;
+  purchasedBy?: string | null;
 };
 
 type TransactionModalProps = {
@@ -47,8 +53,12 @@ export function TransactionModal({
   const [isRecurring, setIsRecurring] = useState(false);
   const [expenseType, setExpenseType] = useState<"FIXED" | "VARIABLE">("VARIABLE");
   const [expenseStatus, setExpenseStatus] = useState<"PAID" | "PENDING" | "OVERDUE">("PENDING");
+  const [creditCardId, setCreditCardId] = useState("");
+  const [installments, setInstallments] = useState("1");
+  const [purchasedBy, setPurchasedBy] = useState("");
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -63,26 +73,38 @@ export function TransactionModal({
         setAmount(String(editTransaction.amount));
         setDate(new Date(editTransaction.date).toISOString().slice(0, 10));
         setCategoryId(editTransaction.categoryId || "");
+        setCreditCardId(editTransaction.creditCardId || "");
         setDescription(editTransaction.notes || "");
         setIsRecurring(editTransaction.isRecurring ?? false);
         setExpenseType(editTransaction.expenseType ?? "VARIABLE");
         setExpenseStatus(editTransaction.isPaid ? "PAID" : "PENDING");
+        setInstallments(editTransaction.installments ? String(editTransaction.installments) : "1");
+        setPurchasedBy(editTransaction.purchasedBy || "");
       } else {
         setType(initialType);
         setTitle("");
         setAmount("");
         setDate(new Date().toISOString().slice(0, 10));
         setCategoryId("");
+        setCreditCardId("");
         setDescription("");
         setIsRecurring(false);
         setExpenseType("VARIABLE");
         setExpenseStatus("PENDING");
+        setInstallments("1");
+        setPurchasedBy("");
       }
       setErrors({});
-      fetch("/api/categories")
-        .then((r) => r.json())
-        .then((data) => setCategories(Array.isArray(data) ? data : []))
-        .catch(() => setCategories([]));
+      Promise.all([
+        fetch("/api/categories").then((r) => r.json()),
+        fetch("/api/credit-cards").then((r) => r.json()),
+      ]).then(([catsData, cardsData]) => {
+        setCategories(Array.isArray(catsData) ? catsData : []);
+        setCreditCards(Array.isArray(cardsData) ? cardsData : []);
+      }).catch(() => {
+        setCategories([]);
+        setCreditCards([]);
+      });
     }
   }, [isOpen, editTransaction, initialType]);
 
@@ -111,11 +133,14 @@ export function TransactionModal({
         amount: Number(amount),
         date: dateObj.toISOString(),
         categoryId: categoryId || undefined,
+        creditCardId: creditCardId || undefined,
         notes: description || undefined,
         isRecurring,
         expenseType: type === "EXPENSE" ? expenseType : undefined,
         isPaid: type === "EXPENSE" ? expenseStatus === "PAID" : true,
         dueDate: type === "EXPENSE" ? dateObj.toISOString() : undefined,
+        installments: creditCardId && Number(installments) > 1 ? Number(installments) : undefined,
+        purchasedBy: purchasedBy.trim() || undefined,
       };
 
       const url = editTransaction
@@ -261,6 +286,60 @@ export function TransactionModal({
               ))}
             </select>
           </div>
+
+          {type === "EXPENSE" && (
+            <>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Cartão de crédito
+                </label>
+                <select
+                  value={creditCardId}
+                  onChange={(e) => setCreditCardId(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-[#10b77f] focus:ring-2 focus:ring-[#10b77f]/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:focus:border-[#10b77f]"
+                >
+                  <option value="">Dinheiro / PIX / Débito</option>
+                  {creditCards.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}{c.last4 ? ` ****${c.last4}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {creditCardId && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                      Parcelas
+                    </label>
+                    <select
+                      value={installments}
+                      onChange={(e) => setInstallments(e.target.value)}
+                      className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-[#10b77f] focus:ring-2 focus:ring-[#10b77f]/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:focus:border-[#10b77f]"
+                    >
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (
+                        <option key={n} value={n}>
+                          {n === 1 ? "À vista" : `${n}x`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                      Quem comprou
+                    </label>
+                    <input
+                      type="text"
+                      value={purchasedBy}
+                      onChange={(e) => setPurchasedBy(e.target.value)}
+                      placeholder="Ex: Eu, Cônjuge..."
+                      className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-[#10b77f] focus:ring-2 focus:ring-[#10b77f]/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:focus:border-[#10b77f]"
+                    />
+                  </div>
+                </div>
+              )}
+            </>
+          )}
 
           {type === "EXPENSE" && (
             <>
