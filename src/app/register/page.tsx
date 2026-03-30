@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
@@ -23,7 +22,6 @@ function MoneyIcon({ className }: { className?: string }) {
 }
 
 export default function RegisterPage() {
-  const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -51,17 +49,12 @@ export default function RegisterPage() {
         setError(data.error ?? "Erro ao cadastrar");
         return;
       }
-      const signInRes = await signIn("credentials", {
+      await signIn("credentials", {
         email,
         password,
-        redirect: false,
+        callbackUrl: "/dashboard",
+        redirect: true,
       });
-      if (signInRes?.ok) {
-        router.push("/dashboard");
-        router.refresh();
-      } else {
-        router.push("/login");
-      }
     } finally {
       setLoading(false);
     }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
@@ -28,6 +29,7 @@ export function AppLayout({
   user?: { name?: string | null; email?: string | null };
 }) {
   const pathname = usePathname();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   return (
     <div className="flex min-h-screen bg-zinc-50 dark:bg-[#131720]">
@@ -63,8 +65,24 @@ export function AppLayout({
 
       <div className="flex flex-1 flex-col lg:pl-64">
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-zinc-200 bg-white/80 px-4 backdrop-blur-sm dark:border-zinc-800 dark:bg-[#1d2330]/80 lg:px-8">
-          <div className="flex items-center gap-4 lg:hidden">
-            <Link href="/dashboard" className="flex items-center gap-2">
+          <div className="flex items-center gap-2 lg:hidden">
+            <button
+              type="button"
+              aria-expanded={mobileNavOpen}
+              aria-controls="mobile-dashboard-nav"
+              onClick={() => setMobileNavOpen((o) => !o)}
+              className="rounded-lg p-2 text-zinc-600 transition hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            >
+              <span className="sr-only">Abrir menu</span>
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {mobileNavOpen ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                )}
+              </svg>
+            </button>
+            <Link href="/dashboard" className="flex items-center gap-2" onClick={() => setMobileNavOpen(false)}>
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#10b77f]/20">
                 <MoneyIcon className="h-5 w-5 text-[#10b77f]" />
               </div>
@@ -85,6 +103,37 @@ export function AppLayout({
             </button>
           </div>
         </header>
+
+        {mobileNavOpen && (
+          <div
+            id="mobile-dashboard-nav"
+            className="border-b border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-[#1d2330] lg:hidden"
+          >
+            <nav className="flex max-h-[60vh] flex-col gap-1 overflow-y-auto">
+              {navItems.map((item) => {
+                const isActive =
+                  pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileNavOpen(false)}
+                    className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium ${
+                      isActive
+                        ? "bg-[#10b77f]/10 text-[#10b77f] dark:bg-[#10b77f]/20"
+                        : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                    }`}
+                  >
+                    <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
+                    </svg>
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
+        )}
 
         <main className="flex-1 p-4 lg:p-8">{children}</main>
       </div>

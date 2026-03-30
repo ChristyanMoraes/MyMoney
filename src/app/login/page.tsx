@@ -2,7 +2,8 @@
 
 import { signIn } from "next-auth/react";
 import Link from "next/link";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 function MoneyIcon({ className }: { className?: string }) {
@@ -21,28 +22,33 @@ function MoneyIcon({ className }: { className?: string }) {
   );
 }
 
-export default function LoginPage() {
+function LoginForm() {
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const err = searchParams.get("error");
+    if (err === "CredentialsSignin") {
+      setError("Email ou senha incorretos.");
+    }
+  }, [searchParams]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
-      const res = await signIn("credentials", {
+      await signIn("credentials", {
         email,
         password,
-        redirect: false,
+        callbackUrl: "/dashboard",
+        redirect: true,
       });
-      if (res?.error) {
-        setError("Email ou senha incorretos.");
-        return;
-      }
-      window.location.href = "/dashboard";
-    } finally {
+    } catch {
+      setError("Não foi possível entrar. Tente novamente.");
       setLoading(false);
     }
   }
@@ -117,5 +123,19 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-[#131720]">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">Carregando…</p>
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

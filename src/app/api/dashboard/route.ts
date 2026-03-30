@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { getDashboardMonthUtcRange } from "@/lib/dashboard-month-range";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request: Request) {
@@ -16,18 +17,7 @@ export async function GET(request: Request) {
     ? parseInt(searchParams.get("year")!, 10)
     : new Date().getFullYear();
 
-  // Usar UTC para evitar problemas de fuso horário (transações podem ter sido salvas em horários diferentes)
-  const startOfMonth = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
-  const startOfNextMonth = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
-  const endOfMonth = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
-
-  const prevMonth = month === 1 ? 12 : month - 1;
-  const prevYear = month === 1 ? year - 1 : year;
-  const startOfPrevMonth = new Date(Date.UTC(prevYear, prevMonth - 1, 1, 0, 0, 0, 0));
-  const startOfPrevNextMonth = new Date(Date.UTC(prevYear, prevMonth, 1, 0, 0, 0, 0));
-
-  const dateFilter = { gte: startOfMonth, lt: startOfNextMonth };
-  const prevDateFilter = { gte: startOfPrevMonth, lt: startOfPrevNextMonth };
+  const { dateFilter, prevDateFilter, endOfMonth } = getDashboardMonthUtcRange(month, year);
 
   const [
     transactions,

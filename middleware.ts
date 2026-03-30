@@ -1,13 +1,12 @@
 import { withAuth } from "next-auth/middleware";
+import { isPathAuthorizedForMiddleware } from "@/lib/middleware-authorized";
 
 export default withAuth({
+  secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
   pages: { signIn: "/login" },
   callbacks: {
-    authorized: ({ token, req }) => {
-      const path = req.nextUrl.pathname;
-      if (path === "/" || path === "/login" || path === "/register") return true;
-      return !!token;
-    },
+    authorized: ({ token, req }) =>
+      isPathAuthorizedForMiddleware(token, req.nextUrl.pathname),
   },
 });
 

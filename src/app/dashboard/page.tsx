@@ -66,7 +66,7 @@ function SkeletonCard() {
 }
 
 export default function DashboardPage() {
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -96,7 +96,23 @@ export default function DashboardPage() {
     loadDashboard();
   }, [month, year]);
 
-  if (!session) return null;
+  useEffect(() => {
+    if (sessionStatus === "unauthenticated") {
+      router.replace("/login");
+    }
+  }, [sessionStatus, router]);
+
+  if (sessionStatus === "loading") {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center text-zinc-500 dark:text-zinc-400">
+        Carregando sessão…
+      </div>
+    );
+  }
+
+  if (sessionStatus === "unauthenticated" || !session) {
+    return null;
+  }
 
   return (
     <AppLayout user={session.user}>
