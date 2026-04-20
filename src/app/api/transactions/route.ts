@@ -17,6 +17,8 @@ const transactionSchema = z.object({
   expenseType: z.enum(["FIXED", "VARIABLE"]).optional(),
   isPaid: z.boolean().optional(),
   installments: z.number().int().min(1).max(60).optional().nullable(),
+  /** Valor de cada parcela (1ª até penúltima); a última parcela = total − soma das anteriores. */
+  installmentAmount: z.number().positive().optional().nullable(),
   purchasedBy: z.string().max(100).optional().nullable(),
 });
 
@@ -79,14 +81,44 @@ export async function POST(request: Request) {
     const isFixed = data.expenseType === "FIXED";
     const installments = data.installments && data.installments > 1 ? data.installments : 1;
     const isParceled = data.creditCardId && installments > 1;
-    const parcelAmount = isParceled ? Number((data.amount / installments).toFixed(2)) : data.amount;
+
+    let parcelAmounts: number[] | null = null;
+    let parcelAmount: number;
+    if (isParceled) {
+      if (
+        data.installmentAmount != null &&
+        data.installmentAmount > 0 &&
+        installments > 1
+      ) {
+        const custom = Number(data.installmentAmount.toFixed(2));
+        const sumFirst = custom * (installments - 1);
+        const last = Number((data.amount - sumFirst).toFixed(2));
+        if (last <= 0) {
+          return NextResponse.json(
+            {
+              error:
+                "Valor da parcela manual incompatível com o total (a última parcela ficaria zero ou negativa)",
+            },
+            { status: 400 },
+          );
+        }
+        parcelAmounts = Array.from({ length: installments - 1 }, () => custom);
+        parcelAmounts.push(last);
+        parcelAmount = parcelAmounts[0];
+      } else {
+        parcelAmount = Number((data.amount / installments).toFixed(2));
+      }
+    } else {
+      parcelAmount = data.amount;
+    }
+
     const shouldCreateNextMonth =
       data.type === "EXPENSE" && (isRecurring || isFixed) && !isParceled;
 
     const baseTxData = {
       type: data.type,
       description: data.description,
-      amount: isParceled ? parcelAmount : data.amount,
+      amount: isParceled ? (parcelAmounts ? parcelAmounts[0] : parcelAmount) : data.amount,
       date: baseDate,
       dueDate: data.dueDate ? new Date(data.dueDate) : null,
       userId: session.user.id,
@@ -111,10 +143,11 @@ export async function POST(request: Request) {
       for (let i = 2; i <= installments; i++) {
         const parcelDate = new Date(baseDate);
         parcelDate.setUTCMonth(parcelDate.getUTCMonth() + i - 1);
+        const amt = parcelAmounts ? parcelAmounts[i - 1] : parcelAmount;
         await prisma.transaction.create({
           data: {
             ...baseTxData,
-            amount: parcelAmount,
+            amount: amt,
             date: parcelDate,
             dueDate: parcelDate,
             isPaid: false,

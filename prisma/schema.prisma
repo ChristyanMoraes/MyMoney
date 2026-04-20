@@ -99,11 +99,26 @@ model User {
   whatsapp  String?
   image    String?
 
-  transactions   Transaction[]
-  financialGoals FinancialGoal[]
+  transactions        Transaction[]
+  financialGoals      FinancialGoal[]
+  responsiblePeople   ResponsiblePerson[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model ResponsiblePerson {
+  id        String   @id @default(cuid())
+  name      String
+  sortOrder Int      @default(0)
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }
 
 model Transaction {

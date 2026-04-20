@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 export type TransactionType = "EXPENSE" | "INCOME";
@@ -11,6 +12,8 @@ type Category = {
 };
 
 type CreditCard = { id: string; name: string; last4?: string | null };
+
+type ResponsiblePerson = { id: string; name: string };
 
 export type EditTransaction = {
   id: string;
@@ -55,10 +58,11 @@ export function TransactionModal({
   const [expenseStatus, setExpenseStatus] = useState<"PAID" | "PENDING" | "OVERDUE">("PENDING");
   const [creditCardId, setCreditCardId] = useState("");
   const [installments, setInstallments] = useState("1");
-  const [purchasedBy, setPurchasedBy] = useState("");
+  const [purchasedByPersonId, setPurchasedByPersonId] = useState("");
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
+  const [responsiblePeople, setResponsiblePeople] = useState<ResponsiblePerson[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -79,7 +83,7 @@ export function TransactionModal({
         setExpenseType(editTransaction.expenseType ?? "VARIABLE");
         setExpenseStatus(editTransaction.isPaid ? "PAID" : "PENDING");
         setInstallments(editTransaction.installments ? String(editTransaction.installments) : "1");
-        setPurchasedBy(editTransaction.purchasedBy || "");
+        setPurchasedByPersonId("");
       } else {
         setType(initialType);
         setTitle("");
@@ -92,21 +96,35 @@ export function TransactionModal({
         setExpenseType("VARIABLE");
         setExpenseStatus("PENDING");
         setInstallments("1");
-        setPurchasedBy("");
+        setPurchasedByPersonId("");
       }
       setErrors({});
       Promise.all([
         fetch("/api/categories").then((r) => r.json()),
         fetch("/api/credit-cards").then((r) => r.json()),
-      ]).then(([catsData, cardsData]) => {
+        fetch("/api/responsible-people").then((r) => r.json()),
+      ]).then(([catsData, cardsData, respData]) => {
         setCategories(Array.isArray(catsData) ? catsData : []);
         setCreditCards(Array.isArray(cardsData) ? cardsData : []);
+        setResponsiblePeople(Array.isArray(respData) ? respData : []);
       }).catch(() => {
         setCategories([]);
         setCreditCards([]);
+        setResponsiblePeople([]);
       });
     }
   }, [isOpen, editTransaction, initialType]);
+
+  useEffect(() => {
+    if (!isOpen || !editTransaction?.purchasedBy?.trim() || responsiblePeople.length === 0) {
+      return;
+    }
+    const pb = editTransaction.purchasedBy.trim();
+    const match = responsiblePeople.find(
+      (p) => p.name.toLowerCase() === pb.toLowerCase(),
+    );
+    setPurchasedByPersonId(match?.id ?? "");
+  }, [isOpen, editTransaction, responsiblePeople]);
 
   function validate(): boolean {
     const e: Record<string, string> = {};
@@ -127,6 +145,10 @@ export function TransactionModal({
       const [y, m, d] = date.split("-").map(Number);
       const dateObj = new Date(Date.UTC(y, m - 1, d, 12, 0, 0, 0));
 
+      const responsibleName = purchasedByPersonId
+        ? responsiblePeople.find((p) => p.id === purchasedByPersonId)?.name?.trim()
+        : undefined;
+
       const body = {
         type,
         description: title,
@@ -140,7 +162,7 @@ export function TransactionModal({
         isPaid: type === "EXPENSE" ? expenseStatus === "PAID" : true,
         dueDate: type === "EXPENSE" ? dateObj.toISOString() : undefined,
         installments: creditCardId && Number(installments) > 1 ? Number(installments) : undefined,
-        purchasedBy: purchasedBy.trim() || undefined,
+        purchasedBy: creditCardId ? responsibleName || undefined : undefined,
       };
 
       const url = editTransaction
@@ -325,16 +347,31 @@ export function TransactionModal({
                     </select>
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                      Quem comprou
-                    </label>
-                    <input
-                      type="text"
-                      value={purchasedBy}
-                      onChange={(e) => setPurchasedBy(e.target.value)}
-                      placeholder="Ex: Eu, Cônjuge..."
+                    <div className="mb-1 flex flex-wrap items-center justify-between gap-1">
+                      <label htmlFor="tm-purchased-by" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                        Quem comprou
+                      </label>
+                      <Link
+                        href="/dashboard/responsaveis"
+                        className="text-xs font-medium text-[#10b77f] hover:underline"
+                        onClick={onClose}
+                      >
+                        Gerir
+                      </Link>
+                    </div>
+                    <select
+                      id="tm-purchased-by"
+                      value={purchasedByPersonId}
+                      onChange={(e) => setPurchasedByPersonId(e.target.value)}
                       className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-[#10b77f] focus:ring-2 focus:ring-[#10b77f]/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:focus:border-[#10b77f]"
-                    />
+                    >
+                      <option value="">Opcional</option>
+                      {responsiblePeople.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
               )}

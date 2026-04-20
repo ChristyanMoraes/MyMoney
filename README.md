@@ -32,9 +32,15 @@ Comandos (ver também `Cursor.md` e `Plano-testes.md`):
 
 Por defeito o E2E usa **`http://localhost:3000`** (alinhado com `NEXTAUTH_URL`). Com `npm run dev` já a correr, o Playwright reutiliza o servidor (fora de CI). Outra porta: `PORT=3001 npm run test:e2e` ou `PLAYWRIGHT_BASE_URL=...`. Em CI, use `CI=1` para subir com `next build` + `next start`.
 
-### Deploy (ex.: Digital Ocean)
+### Deploy (ex.: Digital Ocean App Platform)
 
-O client Prisma é gerado em `src/generated/prisma` (não está no Git). O script `npm run build` executa **`prisma generate`** antes do `next build`. Garanta que a variável **`DATABASE_URL`** está disponível na fase de build da App Platform (ou um valor placeholder só para o generate, se a plataforma não injetar a URL real nessa fase).
+1. **Tipo de recurso:** use um **Web Service** (componente `services` no App Spec), **não** “Static Site” (`static_sites`). Esta app é Next.js com SSR e APIs; um static site só publica ficheiros estáticos e tipicamente responde **404** na raiz.
+2. **Comandos:** `build_command`: `npm ci && npm run build` · `run_command`: `npm start`. A plataforma define `PORT` (sou frente uso comum `8080` + `http_port: 8080` no spec).
+3. **Prisma:** o client é gerado em `src/generated/prisma` (fora do Git). `npm run build` já corre **`prisma generate`** antes do `next build`. **`DATABASE_URL`** tem de existir em **build e runtime** (`RUN_AND_BUILD_TIME` ou equivalente na UI).
+4. **Auth:** defina **`AUTH_SECRET`** (e alinhe **`NEXTAUTH_URL`** com o URL público HTTPS da app, ex. `https://….ondigitalocean.app`).
+5. **Domínio (`DOMAIN_FAILED`):** no painel, garanta um hostname válido (domínio por defeito da DO ou custom DNS correcto). Evite regras de ingress com `authority` vazio.
+
+Exemplo de App Spec: [`.do/app.yaml`](.do/app.yaml) (ajuste secrets, região e tamanho da instância).
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 

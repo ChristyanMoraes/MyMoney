@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import {
@@ -16,6 +16,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { AppLayout } from "@/components/AppLayout";
+import { CreditCardPurchaseModal } from "@/components/CreditCardPurchaseModal";
 import { MonthFilter } from "@/components/MonthFilter";
 
 type CreditCard = { id: string; name: string; last4?: string | null };
@@ -50,6 +51,21 @@ export default function CartaoCreditoPage() {
   const [newCardClosing, setNewCardClosing] = useState("10");
   const [newCardDue, setNewCardDue] = useState("15");
   const [addingCard, setAddingCard] = useState(false);
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+
+  const loadTransactions = useCallback(() => {
+    if (!selectedCardId) {
+      setLoading(false);
+      setTransactions([]);
+      return;
+    }
+    setLoading(true);
+    fetch(`/api/transactions?month=${month}&year=${year}&creditCardId=${selectedCardId}`)
+      .then((r) => r.json())
+      .then((data) => setTransactions(Array.isArray(data) ? data : []))
+      .catch(() => setTransactions([]))
+      .finally(() => setLoading(false));
+  }, [selectedCardId, month, year]);
 
   useEffect(() => {
     fetch("/api/credit-cards")
@@ -63,18 +79,8 @@ export default function CartaoCreditoPage() {
   }, []);
 
   useEffect(() => {
-    if (!selectedCardId) {
-      setLoading(false);
-      setTransactions([]);
-      return;
-    }
-    setLoading(true);
-    fetch(`/api/transactions?month=${month}&year=${year}&creditCardId=${selectedCardId}`)
-      .then((r) => r.json())
-      .then((data) => setTransactions(Array.isArray(data) ? data : []))
-      .catch(() => setTransactions([]))
-      .finally(() => setLoading(false));
-  }, [selectedCardId, month, year]);
+    loadTransactions();
+  }, [loadTransactions]);
 
   if (!session) return null;
 
@@ -118,7 +124,7 @@ export default function CartaoCreditoPage() {
 
   function parcelLabel(t: Transaction) {
     if (t.installments && t.installments > 1 && t.installmentNumber) {
-      return `${t.installmentNumber}/${t.installments}`;
+      return `${t.installmentNumber} de ${t.installments}`;
     }
     return "À vista";
   }
@@ -342,12 +348,20 @@ export default function CartaoCreditoPage() {
                 setYear(y);
               }}
             />
+            <button
+              type="button"
+              onClick={() => setShowPurchaseModal(true)}
+              disabled={!selectedCardId}
+              className="rounded-lg bg-[#10b77f] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#10b77f]/90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Nova compra no cartão
+            </button>
           </div>
         </div>
 
         <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-[#1d2330]">
           <p className="text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-            Total no mês{selectedCard ? ` — ${selectedCard.name}` : ""}
+            Total no mês (calendário){selectedCard ? ` — ${selectedCard.name}` : ""}
           </p>
           <p className="mt-1 text-xl font-bold text-rose-600 dark:text-rose-400">
             {loading ? "—" : formatCurrency(total)}
@@ -402,6 +416,15 @@ export default function CartaoCreditoPage() {
             </section>
           )}
         </div>
+
+        {selectedCardId && (
+          <CreditCardPurchaseModal
+            isOpen={showPurchaseModal}
+            onClose={() => setShowPurchaseModal(false)}
+            creditCardId={selectedCardId}
+            onSaved={loadTransactions}
+          />
+        )}
 
         {showAddCard && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -488,7 +511,7 @@ export default function CartaoCreditoPage() {
                 <tr className="border-b border-zinc-200 dark:border-zinc-800">
                   <th className="px-4 py-3 text-left font-medium">Descrição</th>
                   <th className="px-4 py-3 text-left font-medium">Categoria</th>
-                  <th className="px-4 py-3 text-left font-medium">Parcelas</th>
+                  <th className="px-4 py-3 text-left font-medium">Parcela</th>
                   <th className="px-4 py-3 text-left font-medium">Responsável</th>
                   <th className="px-4 py-3 text-left font-medium">Data</th>
                   <th className="px-4 py-3 text-right font-medium">Valor</th>
