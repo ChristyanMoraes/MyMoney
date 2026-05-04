@@ -102,7 +102,9 @@ export default function MovimentacoesPage() {
   async function loadTransactions() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/transactions?month=${month}&year=${year}`);
+      const res = await fetch(
+        `/api/transactions?month=${month}&year=${year}&excludeCreditCard=true`,
+      );
       const data = await res.json();
       setTransactions(Array.isArray(data) ? data : []);
     } catch {

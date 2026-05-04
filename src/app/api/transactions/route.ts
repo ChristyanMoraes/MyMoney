@@ -34,8 +34,15 @@ export async function GET(request: Request) {
   const year = searchParams.get("year") ? parseInt(searchParams.get("year")!, 10) : null;
   const categoryId = searchParams.get("categoryId") || null;
   const creditCardId = searchParams.get("creditCardId") || null;
+  const excludeCreditCard = searchParams.get("excludeCreditCard") === "true";
 
-  const where: { userId: string; type?: "EXPENSE"; date?: { gte: Date; lt: Date }; categoryId?: string; creditCardId?: string } = { userId: session.user.id };
+  const where: {
+    userId: string;
+    type?: "EXPENSE";
+    date?: { gte: Date; lt: Date };
+    categoryId?: string;
+    creditCardId?: string | null;
+  } = { userId: session.user.id };
 
   if (month != null && year != null) {
     const startOfMonth = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
@@ -51,6 +58,8 @@ export async function GET(request: Request) {
   if (creditCardId) {
     where.creditCardId = creditCardId;
     where.type = "EXPENSE";
+  } else if (excludeCreditCard) {
+    where.creditCardId = null;
   }
 
   const transactions = await prisma.transaction.findMany({

@@ -21,6 +21,8 @@ import { MonthFilter } from "@/components/MonthFilter";
 
 type CreditCard = { id: string; name: string; last4?: string | null };
 
+type ResponsiblePerson = { id: string; name: string };
+
 type Transaction = {
   id: string;
   description: string;
@@ -34,6 +36,9 @@ type Transaction = {
   purchasedBy?: string | null;
 };
 
+const ALL_RESPONSIBLES = "__ALL__";
+const UNASSIGNED_RESPONSIBLE = "__UNASSIGNED__";
+
 const COLORS = ["#10b77f", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16"];
 
 export default function CartaoCreditoPage() {
@@ -44,6 +49,8 @@ export default function CartaoCreditoPage() {
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
   const [selectedCardId, setSelectedCardId] = useState<string>("");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [responsiblePeople, setResponsiblePeople] = useState<ResponsiblePerson[]>([]);
+  const [responsibleFilter, setResponsibleFilter] = useState<string>(ALL_RESPONSIBLES);
   const [loading, setLoading] = useState(true);
   const [showAddCard, setShowAddCard] = useState(false);
   const [newCardName, setNewCardName] = useState("");
@@ -76,6 +83,13 @@ export default function CartaoCreditoPage() {
         if (cards.length > 0 && !selectedCardId) setSelectedCardId(cards[0].id);
       })
       .catch(() => setCreditCards([]));
+
+    fetch("/api/responsible-people")
+      .then((r) => r.json())
+      .then((data) => {
+        setResponsiblePeople(Array.isArray(data) ? data : []);
+      })
+      .catch(() => setResponsiblePeople([]));
   }, []);
 
   useEffect(() => {
@@ -84,10 +98,20 @@ export default function CartaoCreditoPage() {
 
   if (!session) return null;
 
-  const total = transactions.reduce((s, t) => s + Number(t.amount), 0);
   const selectedCard = creditCards.find((c) => c.id === selectedCardId);
 
-  const byCategory = transactions.reduce(
+  function matchesResponsibleFilter(t: Transaction) {
+    if (responsibleFilter === ALL_RESPONSIBLES) return true;
+    if (responsibleFilter === UNASSIGNED_RESPONSIBLE) {
+      return !t.purchasedBy?.trim();
+    }
+    return t.purchasedBy?.trim().toLowerCase() === responsibleFilter.toLowerCase();
+  }
+
+  const filteredTransactions = transactions.filter(matchesResponsibleFilter);
+  const total = filteredTransactions.reduce((s, t) => s + Number(t.amount), 0);
+
+  const byCategory = filteredTransactions.reduce(
     (acc, t) => {
       const name = t.category?.name ?? "Sem categoria";
       if (!acc[name]) acc[name] = 0;
@@ -100,6 +124,8 @@ export default function CartaoCreditoPage() {
     .map(([name, total]) => ({ name, total }))
     .sort((a, b) => b.total - a.total);
 
+  // Gráfico "por responsável" mantém visão geral, sem aplicar o filtro,
+  // para preservar o comparativo entre responsáveis.
   const byPurchasedBy = transactions.reduce(
     (acc, t) => {
       const who = t.purchasedBy?.trim() || "Não informado";
@@ -112,6 +138,25 @@ export default function CartaoCreditoPage() {
   const purchasedByRanking = Object.entries(byPurchasedBy)
     .map(([name, total]) => ({ name, total }))
     .sort((a, b) => b.total - a.total);
+
+  const responsibleOptions = (() => {
+    const fromList = responsiblePeople.map((p) => p.name);
+    const fromTx = Array.from(
+      new Set(
+        transactions
+          .map((t) => t.purchasedBy?.trim())
+          .filter((v): v is string => !!v),
+      ),
+    );
+    const merged = new Map<string, string>();
+    for (const name of [...fromList, ...fromTx]) {
+      const key = name.toLowerCase();
+      if (!merged.has(key)) merged.set(key, name);
+    }
+    return Array.from(merged.values()).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  })();
+
+  const hasUnassigned = transactions.some((t) => !t.purchasedBy?.trim());
 
   function formatCurrency(value: number) {
     return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
@@ -348,6 +393,27 @@ export default function CartaoCreditoPage() {
                 setYear(y);
               }}
             />
+            <div className="min-w-[180px]">
+              <label htmlFor="responsible-filter" className="sr-only">
+                Responsável
+              </label>
+              <select
+                id="responsible-filter"
+                value={responsibleFilter}
+                onChange={(e) => setResponsibleFilter(e.target.value)}
+                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-[#10b77f] dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:focus:border-[#10b77f]"
+              >
+                <option value={ALL_RESPONSIBLES}>Responsável: Todos</option>
+                {responsibleOptions.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+                {hasUnassigned && (
+                  <option value={UNASSIGNED_RESPONSIBLE}>Não informado</option>
+                )}
+              </select>
+            </div>
             <button
               type="button"
               onClick={() => setShowPurchaseModal(true)}
@@ -526,16 +592,18 @@ export default function CartaoCreditoPage() {
                       </div>
                     </td>
                   </tr>
-                ) : transactions.length === 0 ? (
+                ) : filteredTransactions.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-4 py-12 text-center">
                       <p className="font-medium text-zinc-900 dark:text-white">
-                        Nenhuma compra no cartão neste mês
+                        {transactions.length === 0
+                          ? "Nenhuma compra no cartão neste mês"
+                          : "Nenhuma compra para o responsável selecionado"}
                       </p>
                     </td>
                   </tr>
                 ) : (
-                  transactions.map((t) => (
+                  filteredTransactions.map((t) => (
                     <tr
                       key={t.id}
                       className="border-b border-zinc-100 last:border-0 dark:border-zinc-800"

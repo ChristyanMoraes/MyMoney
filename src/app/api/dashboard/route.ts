@@ -19,6 +19,8 @@ export async function GET(request: Request) {
 
   const { dateFilter, prevDateFilter, endOfMonth } = getDashboardMonthUtcRange(month, year);
 
+  // Despesas em cartão de crédito ficam isoladas na aba "Cartão de crédito" e
+  // não entram nas métricas/listas do dashboard.
   const [
     transactions,
     prevTransactions,
@@ -32,6 +34,7 @@ export async function GET(request: Request) {
       where: {
         userId: session.user.id,
         date: dateFilter,
+        creditCardId: null,
       },
       include: { category: true },
       orderBy: { date: "desc" },
@@ -40,10 +43,11 @@ export async function GET(request: Request) {
       where: {
         userId: session.user.id,
         date: prevDateFilter,
+        creditCardId: null,
       },
     }),
     prisma.transaction.findMany({
-      where: { userId: session.user.id },
+      where: { userId: session.user.id, creditCardId: null },
       orderBy: { date: "asc" },
     }),
     prisma.transaction.aggregate({
@@ -51,6 +55,7 @@ export async function GET(request: Request) {
         userId: session.user.id,
         type: "INCOME",
         date: dateFilter,
+        creditCardId: null,
       },
       _sum: { amount: true },
     }),
@@ -59,6 +64,7 @@ export async function GET(request: Request) {
         userId: session.user.id,
         type: "EXPENSE",
         date: dateFilter,
+        creditCardId: null,
       },
       _sum: { amount: true },
     }),
@@ -67,6 +73,7 @@ export async function GET(request: Request) {
         userId: session.user.id,
         type: "INCOME",
         date: prevDateFilter,
+        creditCardId: null,
       },
       _sum: { amount: true },
     }),
@@ -75,6 +82,7 @@ export async function GET(request: Request) {
         userId: session.user.id,
         type: "EXPENSE",
         date: prevDateFilter,
+        creditCardId: null,
       },
       _sum: { amount: true },
     }),
